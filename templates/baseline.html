@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMR Control Core</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        /* Custom Industrial Dark-Mode Theme Override */
+        body {
+            background-color: #121824; /* Deep Slate Blue/Grey */
+            color: #e2e8f0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        
+        .navbar {
+            background-color: #1a2333 !important;
+            border-bottom: 1px solid #2e3d56;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .card-telemetry {
+            background-color: #1a2333;
+            border: 1px solid #2e3d56;
+            border-radius: 12px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card-telemetry:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-header-custom {
+            border-bottom: 1px solid #2e3d56;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+
+        .telemetry-value {
+            font-weight: 700;
+            color: #38bdf8; /* High visibility neon cyan */
+            font-family: 'Courier New', Courier, monospace; /* Monospace fits sensors well */
+        }
+
+        /* Status Badge animations */
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 0.5em 0.8em;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark mb-5 py-3">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+                <i class="bi bi-robot text-primary fs-3"></i>
+                <span class="fw-bold tracking-wider">AMR Core HMI</span>
+            </a>
+            
+            <button class="navbar-toggler" type="text/html" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+               <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-3">
+    			<li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house-door me-1"></i> Home</a></li>
+    			<li class="nav-item"><a class="nav-link active" href="/baseline"><i class="bi bi-speedometer2 me-1"></i> Baseline</a></li>
+    			<li class="nav-item"><a class="nav-link" href="/vision"><i class="bi bi-camera-video me-1"></i> Vision Stream</a></li>
+		</ul> 
+                
+		<div class="d-flex align-items-center">
+                    <span id="network-status" class="status-badge bg-warning text-dark">
+                        <span class="spinner-grow spinner-grow-sm" role="status"></span>
+                        Connecting...
+                    </span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row justify-content-center">
+            
+            <div class="col-md-5 mb-4">
+                <div class="card card-telemetry shadow-sm text-center">
+                    <div class="card-header-custom text-secondary p-3 bg-transparent d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-cpu me-2 text-primary"></i>Telemetry Stream</span>
+                        <span class="badge bg-dark text-info">10 Hz</span>
+                    </div>
+                    <div class="card-body py-5">
+                        <p class="text-uppercase text-muted small fw-bold mb-1">Random Baseline Variable</p>
+                        <h2 class="display-2 telemetry-value mb-0">
+                            <span id="ui-distance">--.-</span>
+                        </h2>
+                        <span class="text-secondary fs-6 mt-2 d-inline-block">Raw float output</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        const telemetryChannel = new EventSource("/stream");
+        const statusBadge = document.getElementById("network-status");
+
+        // Runs instantly when connection is established
+        telemetryChannel.onopen = function() {
+            statusBadge.className = "status-badge bg-success text-white";
+            statusBadge.innerHTML = `<i class="bi bi-cloud-check-fill"></i> Live Link`;
+        };
+
+        // Runs instantly whenever data is piped down from hmi.py
+        telemetryChannel.onmessage = function(event) {
+            try {
+                const dataPacket = JSON.parse(event.data);
+                
+                if (dataPacket.randomNumber !== undefined) {
+                    // Update the UI value string seamlessly
+                    document.getElementById("ui-distance").textContent = dataPacket.randomNumber.toFixed(1);
+                }
+                
+            } catch (error) {
+                console.error("Error parsing JSON telemetry payload:", error);
+            }
+        };
+
+        // Runs instantly if the backend crashes, stops running, or network drops
+        telemetryChannel.onerror = function(error) {
+            console.error("SSE Connection Error:", error);
+            statusBadge.className = "status-badge bg-danger text-white";
+            statusBadge.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i> Disconnected`;
+        };
+    </script>
+</body>
+</html>

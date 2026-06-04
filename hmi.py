@@ -9,7 +9,23 @@ def home():
     """Serves the dashboard's core layout shell."""
     return render_template("home.html")
 
-def stream_sensor_payloads():
+@app.route('/baseline')
+def baseline():
+    # Renders your original telemetry stream panel
+    return render_template('baseline.html')
+
+@app.route('/vision')
+def vision():
+    # Renders your new multi-threaded camera container screen
+    return render_template('vision.html')
+
+@app.route('/video_feed')
+def video_feed():
+    # Points back to your existing multi-threaded frame generator pattern
+    return Response(webcam_feed(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+def generate_random_number():
     """
     Generator function serving as your telemetry pipeline.
     This loop continues as long as the browser window stays open.
@@ -28,7 +44,7 @@ def stream_sensor_payloads():
 @app.route('/stream')
 def stream():
     """Persistent HTTP connection endpoint for the live frontend telemetry."""
-    return Response(stream_sensor_payloads(), mimetype='text/event-stream')
+    return Response(generate_random_number(), mimetype='text/event-stream')
 
 if __name__ == '__main__':
     # Configured on port 5001 to keep it accessible locally or via your SSH tunnels
