@@ -1,8 +1,13 @@
 import time
 import random
-from flask import Flask, render_template, Response
+import threading
+from flask import Flask, render_template, Response, jsonify, request
 
 app = Flask(__name__)
+
+# Shared state for telemetry rate control. Default is 1 Hz.
+telemetry_rate_hz = 1.0
+telemetry_rate_lock = threading.Lock()
 
 @app.route('/')
 def home():
@@ -39,7 +44,26 @@ def generate_random_number():
         payload = f"data: {{\"randomNumber\": {random_number}}}\n\n"
         
         yield payload
-        time.sleep(0.1)  # Streams updates at 10Hz (10 frames per second)
+        with telemetry_rate_lock:
+            interval = 1.0 / telemetry_rate_hz
+        time.sleep(interval)
+
+@app.route('/set_rate')
+def set_rate():
+    """Update the telemetry rate in Hz."""
+    requested_hz = request.args.get('hz', type=float)
+    if requested_hz is None:
+        return jsonify({"success": False, "error": "Missing hz parameter."}), 400
+    if requested_hz <= 0:
+        return jsonify({"success": False, "error": "hz must be greater than 0."}), 400
+    if requested_hz > 20:
+        return jsonify({"success": False, "error": "hz must be 20 or less."}), 400
+
+    global telemetry_rate_hz
+    with telemetry_rate_lock:
+        telemetry_rate_hz = requested_hz
+
+    return jsonify({"success": True, "hz": telemetry_rate_hz}), 200
 
 @app.route('/stream')
 def stream():

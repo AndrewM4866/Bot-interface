@@ -95,7 +95,7 @@
                 <div class="card card-telemetry shadow-sm text-center">
                     <div class="card-header-custom text-secondary p-3 bg-transparent d-flex justify-content-between align-items-center">
                         <span><i class="bi bi-cpu me-2 text-primary"></i>Telemetry Stream</span>
-                        <span class="badge bg-dark text-info">10 Hz</span>
+                        <span class="badge bg-dark text-info" id="rate-badge">1 Hz</span>
                     </div>
                     <div class="card-body py-5">
                         <p class="text-uppercase text-muted small fw-bold mb-1">Random Baseline Variable</p>
@@ -103,6 +103,34 @@
                             <span id="ui-distance">--.-</span>
                         </h2>
                         <span class="text-secondary fs-6 mt-2 d-inline-block">Raw float output</span>
+
+                        <div class="row g-2 align-items-end mt-4">
+                            <div class="col-sm-8">
+                                <label for="hz-input" class="form-label text-white-50">Telemetry Rate (Hz)</label>
+                                <input id="hz-input" type="number" min="0.1" max="20" step="0.1" class="form-control form-control-dark" value="1.0">
+                            </div>
+                            <div class="col-sm-4">
+                                <button id="set-rate" class="btn btn-outline-warning w-100" type="button">
+                                    <i class="bi bi-speedometer2 me-2"></i>Set Rate
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mt-3 text-start text-white-50">
+                            <small>Current stream rate:</small>
+                            <div id="current-rate" class="fs-5 fw-semibold">1.0 Hz</div>
+                        </div>
+
+                        <div class="mt-4">
+                            <button id="capture-value" class="btn btn-outline-info btn-lg" type="button">
+                                <i class="bi bi-camera-fill me-2"></i>Capture Current Value
+                            </button>
+                        </div>
+
+                        <div class="mt-3 text-start text-white-50">
+                            <small>Captured reading:</small>
+                            <div id="captured-value" class="fs-4 fw-semibold">--.-</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -115,6 +143,21 @@
     <script>
         const telemetryChannel = new EventSource("/stream");
         const statusBadge = document.getElementById("network-status");
+        const uiDistance = document.getElementById("ui-distance");
+        const capturedValue = document.getElementById("captured-value");
+        const captureButton = document.getElementById("capture-value");
+        const hzInput = document.getElementById("hz-input");
+        const setRateButton = document.getElementById("set-rate");
+        const currentRate = document.getElementById("current-rate");
+        const rateBadge = document.getElementById("rate-badge");
+        let latestRandomNumber = null;
+
+        function updateRateDisplay(hz) {
+            const formatted = parseFloat(hz).toFixed(1);
+            currentRate.textContent = `${formatted} Hz`;
+            rateBadge.textContent = `${formatted} Hz`;
+            hzInput.value = formatted;
+        }
 
         // Runs instantly when connection is established
         telemetryChannel.onopen = function() {
@@ -128,8 +171,8 @@
                 const dataPacket = JSON.parse(event.data);
                 
                 if (dataPacket.randomNumber !== undefined) {
-                    // Update the UI value string seamlessly
-                    document.getElementById("ui-distance").textContent = dataPacket.randomNumber.toFixed(1);
+                    latestRandomNumber = dataPacket.randomNumber;
+                    uiDistance.textContent = latestRandomNumber.toFixed(1);
                 }
                 
             } catch (error) {
@@ -137,12 +180,44 @@
             }
         };
 
+        captureButton.addEventListener('click', function() {
+            if (latestRandomNumber === null) {
+                capturedValue.textContent = 'No value yet';
+                return;
+            }
+            capturedValue.textContent = latestRandomNumber.toFixed(1);
+        });
+
+        setRateButton.addEventListener('click', function() {
+            const desiredHz = parseFloat(hzInput.value);
+            if (Number.isNaN(desiredHz) || desiredHz <= 0 || desiredHz > 20) {
+                alert('Please enter a valid rate between 0.1 and 20 Hz.');
+                return;
+            }
+
+            fetch(`/set_rate?hz=${desiredHz}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateRateDisplay(data.hz);
+                    } else {
+                        alert(`Rate update failed: ${data.error}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Rate update error:', error);
+                    alert('Unable to update telemetry rate.');
+                });
+        });
+
         // Runs instantly if the backend crashes, stops running, or network drops
         telemetryChannel.onerror = function(error) {
             console.error("SSE Connection Error:", error);
             statusBadge.className = "status-badge bg-danger text-white";
             statusBadge.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i> Disconnected`;
         };
+
+        updateRateDisplay(1.0);
     </script>
 </body>
 </html>
